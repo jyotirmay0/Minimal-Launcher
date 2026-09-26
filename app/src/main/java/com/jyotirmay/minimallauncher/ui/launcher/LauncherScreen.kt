@@ -25,9 +25,9 @@ fun LauncherScreen(
 ) {
     val state by viewModel.state.collectAsState()
 
-    // Handle back press in search mode
-    BackHandler(enabled = state.isSearchVisible) {
-        viewModel.closeSearch()
+    // Handle back press in search or letter mode: smoothly returns to Home
+    BackHandler(enabled = state.mode !is LauncherMode.Home) {
+        viewModel.returnToHome()
     }
 
     Box(
@@ -97,6 +97,9 @@ fun LauncherScreen(
                 },
                 onRelease = {
                     viewModel.onAlphabetRelease()
+                },
+                onStarTap = {
+                    viewModel.returnToHome()
                 },
                 modifier = Modifier.align(Alignment.CenterEnd)
             )

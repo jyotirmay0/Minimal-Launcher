@@ -2,8 +2,10 @@ package com.jyotirmay.minimallauncher.ui.launcher
 
 import android.graphics.drawable.Drawable
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -38,8 +41,13 @@ fun AppRow(
     onLongPress: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val view = LocalView.current
     val bitmap = remember(icon) {
-        icon.toBitmap(width = 96, height = 96).asImageBitmap()
+        try {
+            icon.toBitmap(width = 96, height = 96).asImageBitmap()
+        } catch (_: Exception) {
+            null
+        }
     }
 
     Row(
@@ -48,20 +56,32 @@ fun AppRow(
             .fillMaxWidth()
             .combinedClickable(
                 onClick = onTap,
-                onLongClick = onLongPress
+                onLongClick = {
+                    view.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+                    onLongPress()
+                }
             )
             .padding(horizontal = 24.dp, vertical = 8.dp)
             .semantics {
                 contentDescription = if (isFavourite) "$label, favourite" else label
             }
     ) {
-        Image(
-            bitmap = bitmap,
-            contentDescription = null,
-            modifier = Modifier
-                .size(40.dp)
-                .clip(RoundedCornerShape(10.dp))
-        )
+        if (bitmap != null) {
+            Image(
+                bitmap = bitmap,
+                contentDescription = null,
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(10.dp))
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+            )
+        }
 
         Spacer(modifier = Modifier.width(16.dp))
 

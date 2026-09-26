@@ -1,5 +1,8 @@
 package com.jyotirmay.minimallauncher.ui.launcher
 
+import android.content.Intent
+import android.provider.AlarmClock
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,6 +17,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.jyotirmay.minimallauncher.data.model.LauncherApp
 import kotlinx.coroutines.delay
@@ -32,13 +36,15 @@ fun HomeContent(
     onAppLongPress: (LauncherApp) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     var currentTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
 
-    // Update clock every second
+    // Update clock on minute boundary to save battery and CPU cycles
     LaunchedEffect(Unit) {
         while (true) {
             currentTime = System.currentTimeMillis()
-            delay(1000L)
+            val nextMinuteDelay = 60_000L - (currentTime % 60_000L)
+            delay(nextMinuteDelay.coerceAtLeast(1000L))
         }
     }
 
@@ -51,18 +57,43 @@ fun HomeContent(
             .fillMaxWidth()
             .padding(start = 24.dp, top = 80.dp, end = 56.dp)
     ) {
-        // Clock
+        // Clock - tap to open Clock/Alarms
         Text(
             text = timeFormat.format(date),
             style = MaterialTheme.typography.displayLarge,
-            color = MaterialTheme.colorScheme.onBackground
+            color = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.clickable {
+                try {
+                    val intent = Intent(AlarmClock.ACTION_SHOW_ALARMS).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    context.startActivity(intent)
+                } catch (e: Exception) {
+                    try {
+                        val fallback = Intent(Intent.ACTION_MAIN).apply {
+                            addCategory(Intent.CATEGORY_LAUNCHER)
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        }
+                        context.startActivity(fallback)
+                    } catch (_: Exception) {}
+                }
+            }
         )
 
-        // Date
+        // Date - tap to open Calendar
         Text(
             text = dateFormat.format(date),
             style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
+            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+            modifier = Modifier.clickable {
+                try {
+                    val intent = Intent(Intent.ACTION_MAIN).apply {
+                        addCategory(Intent.CATEGORY_APP_CALENDAR)
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    context.startActivity(intent)
+                } catch (_: Exception) {}
+            }
         )
 
         Spacer(modifier = Modifier.height(32.dp))

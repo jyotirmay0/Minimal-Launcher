@@ -1,8 +1,8 @@
 package com.jyotirmay.minimallauncher.ui.launcher
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -61,6 +61,7 @@ fun AlphabetBar(
     onTouchStart: (Char, Float) -> Unit,
     onDrag: (Char, Float) -> Unit,
     onRelease: () -> Unit,
+    onStarTap: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val density = LocalDensity.current
@@ -75,6 +76,13 @@ fun AlphabetBar(
 
     // Spring animation for curve displacement
     val springProgress = remember { Animatable(0f) }
+    var lastActiveFingerY by remember { mutableFloatStateOf(0f) }
+
+    LaunchedEffect(fingerY) {
+        if (fingerY != null) {
+            lastActiveFingerY = fingerY
+        }
+    }
 
     // Previous selected letter for haptic
     var previousLetter by remember { mutableStateOf<Char?>(null) }
@@ -98,8 +106,8 @@ fun AlphabetBar(
             springProgress.animateTo(
                 targetValue = 0f,
                 animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessMedium
+                    dampingRatio = 0.65f,
+                    stiffness = 380f
                 )
             )
         }
@@ -151,13 +159,15 @@ fun AlphabetBar(
                     alphabetGlobalTop = coords.positionInParent().y
                 }
         ) {
-            // Star at top
+            // Star at top (tap to return to Home)
             Text(
                 text = "☆",
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
                 textAlign = TextAlign.Center,
-                modifier = Modifier.padding(bottom = 2.dp)
+                modifier = Modifier
+                    .clickable { onStarTap() }
+                    .padding(bottom = 2.dp)
             )
 
             // A–Z letters
@@ -165,10 +175,11 @@ fun AlphabetBar(
                 val isAvailable = letter in availableLetters
                 val alpha = if (isAvailable) 0.8f else 0.25f
 
-                // Calculate curve displacement
-                val displacement = if (fingerY != null && springProgress.value > 0f) {
+                // Calculate curve displacement - uses lastActiveFingerY during spring-back release
+                val effectiveFingerY = fingerY ?: if (springProgress.value > 0.001f) lastActiveFingerY else null
+                val displacement = if (effectiveFingerY != null && springProgress.value > 0.001f) {
                     val letterCenterY = letterPositions[index]
-                    val localFingerY = fingerY - alphabetGlobalTop
+                    val localFingerY = effectiveFingerY - alphabetGlobalTop
                     AlphabetTouchMapper.curveDisplacement(
                         letterY = letterCenterY,
                         fingerY = localFingerY,

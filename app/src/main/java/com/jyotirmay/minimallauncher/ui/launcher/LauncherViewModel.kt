@@ -1,8 +1,12 @@
 package com.jyotirmay.minimallauncher.ui.launcher
 
 import android.app.Application
+import android.content.BroadcastReceiver
 import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.os.Build
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.jyotirmay.minimallauncher.data.model.LauncherApp
@@ -21,6 +25,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     private val appRepository = AppRepository(application)
     private val favoritesStore = FavoritesStore(application)
+    private var runtimePackageReceiver: BroadcastReceiver? = null
 
     private val _state = MutableStateFlow(LauncherState())
     val state: StateFlow<LauncherState> = _state.asStateFlow()
@@ -79,7 +84,9 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     }
 
     private fun setupPackageChangeListener() {
-        PackageChangeReceiver.onPackageChanged = {
+        val app = getApplication<Application>()
+
+        val onPackagesUpdated = {
             viewModelScope.launch(Dispatchers.IO) {
                 appRepository.invalidateCache()
                 val apps = appRepository.refreshApps()
@@ -100,6 +107,44 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                 val installedPackages = apps.map { it.packageName }.toSet()
                 favoritesStore.removeStalePackages(installedPackages)
             }
+        }
+
+        // Static receiver hook
+        PackageChangeReceiver.onPackageChanged = { onPackagesUpdated() }
+
+        // Dynamic runtime receiver for reliable updates on Android 8.0+
+        try {
+            val receiver = object : BroadcastReceiver() {
+                override fun onReceive(context: Context?, intent: Intent?) {
+                    onPackagesUpdated()
+                }
+            }
+            val filter = IntentFilter().apply {
+                addAction(Intent.ACTION_PACKAGE_ADDED)
+                addAction(Intent.ACTION_PACKAGE_REMOVED)
+                addAction(Intent.ACTION_PACKAGE_REPLACED)
+                addDataScheme("package")
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                app.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
+            } else {
+                app.registerReceiver(receiver, filter)
+            }
+            runtimePackageReceiver = receiver
+        } catch (_: Exception) {}
+    }
+
+    fun returnToHome() {
+        _state.update {
+            it.copy(
+                mode = LauncherMode.Home,
+                selectedLetter = null,
+                fingerY = null,
+                isAlphabetActive = false,
+                isSearchVisible = false,
+                searchQuery = "",
+                searchResults = emptyList()
+            )
         }
     }
 
@@ -210,5 +255,10 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     override fun onCleared() {
         super.onCleared()
         PackageChangeReceiver.onPackageChanged = null
+        runtimePackageReceiver?.let {
+            try {
+                getApplication<Application>().unregisterReceiver(it)
+            } catch (_: Exception) {}
+        }
     }
 }
